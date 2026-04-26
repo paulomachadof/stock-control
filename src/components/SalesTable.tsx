@@ -54,6 +54,10 @@ interface SalesTableDevice {
   valor_total_venda: number;
   vendedor_nome?: string;
   canal_venda?: string;
+  items?: Array<{
+    productName: string;
+    sku: string;
+  }>;
 }
 
 interface SalesTableProps {
@@ -82,7 +86,12 @@ export function SalesTable({ devices, showSeller = false }: SalesTableProps) {
     const matchesSearch =
       device.aparelho.toLowerCase().includes(searchTerm.toLowerCase()) ||
       device.comprador.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      device.imei.includes(searchTerm);
+      device.imei.includes(searchTerm) ||
+      (device.items ?? []).some(
+        (item) =>
+          item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.sku.toLowerCase().includes(searchTerm.toLowerCase()),
+      );
 
     const matchesStatus =
       statusFilter === "all" ||
@@ -391,6 +400,11 @@ export function SalesTable({ devices, showSeller = false }: SalesTableProps) {
                             {device.cor}
                             {device.canal_venda ? ` • ${device.canal_venda}` : ""}
                           </div>
+                          {device.items?.length ? (
+                            <div className="mt-1 text-xs text-primary">
+                              {device.items.length} linha(s) de item
+                            </div>
+                          ) : null}
                         </div>
                       </TableCell>
                       {showSeller && (

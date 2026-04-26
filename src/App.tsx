@@ -11,8 +11,10 @@ import AddEditStock from "./pages/AddEditStock";
 import AddEditSale from "./pages/AddEditSale";
 import StockDetail from "./pages/StockDetail";
 import SaleDetail from "./pages/SaleDetail";
+import SaleReceipt from "./pages/SaleReceipt";
 import Auth from "./pages/Auth";
 import Clients from "./pages/Clients";
+import ClientDetail from "./pages/ClientDetail";
 import Account from "./pages/Account";
 import SellFromStock from "./pages/SellFromStock";
 import CreateUser from "./pages/CreateUser";
@@ -37,8 +39,10 @@ const App = () => (
           <Route path="/sale/add" element={<AddEditSale />} />
           <Route path="/sale/edit/:id" element={<AddEditSale />} />
           <Route path="/sale/:id" element={<SaleDetail />} />
+          <Route path="/sale/:id/receipt" element={<SaleReceipt />} />
           <Route path="/sell/:id" element={<SellFromStock />} />
           <Route path="/clients" element={<Clients />} />
+          <Route path="/clients/:id" element={<ClientDetail />} />
           <Route path="/conta" element={<Account />} />
           <Route path="/conta/criar" element={<CreateUser />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

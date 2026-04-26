@@ -1,19 +1,29 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, ShoppingCart, User, DollarSign, CheckCircle2, XCircle, Loader2, Store } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ArrowLeft, Edit, ShoppingCart, User, DollarSign, CheckCircle2, XCircle, Loader2, ReceiptText, Store } from "lucide-react";
 import { soldDevices } from "@/data/mockData";
+import { formatClientCPF, formatClientPhone } from "@/lib/clientForm";
+import { saleBelongsToClient } from "@/lib/clientSales";
+import { getPaymentMethodLabel, getSalePaymentSummaryFromSale } from "@/lib/salePayment";
 import sellService, { SoldDevice } from "@/services/sellService";
+import { useClientStore } from "@/stores/useClientStore";
 import { toast } from "sonner";
 
 const SaleDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const clients = useClientStore((state) => state.clients);
   const localSale = id ? soldDevices.find((sale) => sale.id === id) : null;
   const [device, setDevice] = useState<SoldDevice | null>(null);
   const [loading, setLoading] = useState(true);
+  const linkedClient = useMemo(
+    () => (device ? clients.find((client) => saleBelongsToClient(device, client)) ?? null : null),
+    [clients, device],
+  );
 
   useEffect(() => {
     if (!id) {
@@ -83,6 +93,17 @@ const SaleDetail = () => {
   }
 
   const profit = device.valor_total_venda - device.valor_compra;
+  const hasSaleItems = Boolean(device.items?.length);
+  const paymentSummary = getSalePaymentSummaryFromSale(device);
+  const clientCpf = device.cpf_cliente || linkedClient?.cpf || "";
+  const clientEmail = device.email_cliente || linkedClient?.email || "";
+  const clientAddress = device.endereco_cliente || linkedClient?.endereco || "";
+  const clientLocation = [
+    device.cidade_cliente || linkedClient?.cidade || "",
+    device.estado_cliente || linkedClient?.estado || "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div className="min-h-screen bg-background">
@@ -100,10 +121,16 @@ const SaleDetail = () => {
               </h1>
               <p className="text-muted-foreground mt-1">Informações completas da transação</p>
             </div>
-            <Button onClick={() => navigate(`/sale/edit/${device.id}`)}>
-              <Edit className="mr-2 h-4 w-4" />
-              Editar
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => navigate(`/sale/${device.id}/receipt`)}>
+                <ReceiptText className="mr-2 h-4 w-4" />
+                Recibo
+              </Button>
+              <Button onClick={() => navigate(`/sale/edit/${device.id}`)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Editar
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -135,13 +162,13 @@ const SaleDetail = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <ShoppingCart className="h-5 w-5" />
-                  Informações do Aparelho
+                  Informações do Produto
                 </CardTitle>
-                <CardDescription>Dados do produto vendido</CardDescription>
+                <CardDescription>Resumo dos produtos vinculados à venda</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Aparelho</p>
+                  <p className="text-sm font-medium text-muted-foreground">Produto</p>
                   <p className="text-lg font-semibold">{device.aparelho}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -155,13 +182,19 @@ const SaleDetail = () => {
                   </div>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">IMEI</p>
+                  <p className="text-sm font-medium text-muted-foreground">IMEI / SKU principal</p>
                   <p className="text-lg font-mono">{device.imei}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Fornecedor</p>
                   <p className="text-lg">{device.fornecedor}</p>
                 </div>
+                {hasSaleItems && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Itens vinculados</p>
+                    <p className="text-lg">{device.items?.length} linha(s) de venda</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -180,8 +213,28 @@ const SaleDetail = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Telefone</p>
-                  <p className="text-lg">{device.numero_telefone}</p>
+                  <p className="text-lg">
+                    {device.numero_telefone || (linkedClient ? formatClientPhone(linkedClient.telefone) : "Não informado")}
+                  </p>
                 </div>
+                {clientCpf && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">CPF</p>
+                    <p className="text-lg">{formatClientCPF(clientCpf)}</p>
+                  </div>
+                )}
+                {clientEmail && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Email</p>
+                    <p className="text-lg break-all">{clientEmail}</p>
+                  </div>
+                )}
+                {(clientAddress || clientLocation) && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Endereço</p>
+                    <p className="text-lg">{[clientAddress, clientLocation].filter(Boolean).join(" • ")}</p>
+                  </div>
+                )}
                 {device.vendedor_nome && (
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Vendedor responsável</p>
@@ -191,6 +244,11 @@ const SaleDetail = () => {
                     </div>
                   </div>
                 )}
+                {linkedClient && (
+                  <Button variant="outline" onClick={() => navigate(`/clients/${linkedClient.id}`)}>
+                    Ver perfil do cliente
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -199,46 +257,68 @@ const SaleDetail = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5" />
-                Informações Financeiras
+                Pagamento
               </CardTitle>
-              <CardDescription>Valores e lucro da venda</CardDescription>
+              <CardDescription>Resumo financeiro e dados de pagamento da venda</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-6 md:grid-cols-3">
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Valor de Compra</p>
+                    <p className="text-sm font-medium text-muted-foreground">Custo da Venda</p>
                     <p className="text-xl font-semibold">{formatCurrency(device.valor_compra)}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Preço à Vista</p>
-                    <p className="text-lg">{formatCurrency(device.preco_vista)}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Subtotal dos Produtos</p>
+                    <p className="text-lg">{formatCurrency(paymentSummary.subtotalProdutos)}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Preço no Cartão</p>
-                    <p className="text-lg">{formatCurrency(device.preco_cartao)}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Desconto Adicional</p>
+                    <p className="text-lg">{formatCurrency(paymentSummary.descontoPagamento)}</p>
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Valor Recebido</p>
-                    <p className="text-xl font-semibold text-primary">{formatCurrency(device.valor_recebido)}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Taxas Adicionais</p>
+                    <p className="text-lg">{formatCurrency(paymentSummary.taxasPagamento)}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Valor Entrega</p>
-                    <p className="text-lg">{formatCurrency(device.valor_entrega)}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Entrega / Frete</p>
+                    <p className="text-lg">{formatCurrency(paymentSummary.valorEntrega)}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Capa e Película</p>
-                    <p className="text-lg">{formatCurrency(device.valor_capa_pelicula)}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Acessórios / Adicionais</p>
+                    <p className="text-lg">{formatCurrency(paymentSummary.valorAcessorios)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Método de Pagamento</p>
+                    <p className="text-lg">{getPaymentMethodLabel(device.metodo_pagamento)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Parcelas</p>
+                    <p className="text-lg">{device.parcelas_pagamento ?? 1}x</p>
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                    <p className="text-sm font-medium text-muted-foreground">Total da Venda</p>
-                    <p className="text-2xl font-bold text-primary">{formatCurrency(device.valor_total_venda)}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Total Final</p>
+                    <p className="text-2xl font-bold text-primary">{formatCurrency(paymentSummary.totalFinal)}</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-secondary/40 border border-border/70">
+                    <p className="text-sm font-medium text-muted-foreground">Valor Recebido</p>
+                    <p className="text-2xl font-bold">{formatCurrency(paymentSummary.valorRecebido)}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 rounded-lg bg-secondary/40 border border-border/70">
+                      <p className="text-sm font-medium text-muted-foreground">Troco</p>
+                      <p className="text-lg font-semibold">{formatCurrency(paymentSummary.troco)}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-secondary/40 border border-border/70">
+                      <p className="text-sm font-medium text-muted-foreground">Saldo</p>
+                      <p className="text-lg font-semibold">{formatCurrency(paymentSummary.saldoPendente)}</p>
+                    </div>
                   </div>
                   <div className={`p-4 rounded-lg ${profit > 0 ? "bg-green-500/10 border border-green-500/20" : "bg-red-500/10 border border-red-500/20"}`}>
                     <p className="text-sm font-medium text-muted-foreground">Lucro</p>
@@ -250,6 +330,55 @@ const SaleDetail = () => {
               </div>
             </CardContent>
           </Card>
+
+          {hasSaleItems && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Itens da Venda</CardTitle>
+                <CardDescription>
+                  Produtos adicionados a partir do estoque com quantidade, desconto e subtotal por linha.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produto</TableHead>
+                      <TableHead>Código / SKU</TableHead>
+                      <TableHead>Quantidade</TableHead>
+                      <TableHead>Preço unitário</TableHead>
+                      <TableHead>Desconto</TableHead>
+                      <TableHead>Subtotal</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {device.items?.map((item) => (
+                      <TableRow key={item.productId}>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="font-medium">{item.productName}</p>
+                            <p className="text-xs text-muted-foreground">{item.description}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1 text-sm">
+                            <p>{item.sku}</p>
+                            <p className="text-xs text-muted-foreground">
+                              IMEIs: {item.stockEntries.map((entry) => entry.imei).join(", ")}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
+                        <TableCell>{formatCurrency(item.discount)}</TableCell>
+                        <TableCell className="font-semibold">{formatCurrency(item.subtotal)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
 
           {device.observacao && (
             <Card>
@@ -265,13 +394,17 @@ const SaleDetail = () => {
         </div>
 
         <div className="mt-6 flex gap-4">
+          <Button variant="outline" onClick={() => navigate(`/sale/${device.id}/receipt`)} size="lg">
+            <ReceiptText className="mr-2 h-4 w-4" />
+            Ver Recibo
+          </Button>
           <Button onClick={() => navigate(`/sale/edit/${device.id}`)} size="lg">
             <Edit className="mr-2 h-4 w-4" />
             Editar Venda
           </Button>
           <Button
             variant="outline"
-            onClick={() => navigate(localSale ? "/painel-comercial" : "/")}
+            onClick={() => navigate("/painel-comercial")}
             size="lg"
           >
             Voltar para Vendas

@@ -21,7 +21,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { stockDevices } from "@/data/mockData";
 import { masks, validators } from "@/hooks/use-masks";
 import stockService, { StockItem } from "@/services/stockServices";
 import { useCallback, useEffect, useState } from "react";
@@ -103,11 +102,18 @@ const AddEditStock = () => {
 
       if (isEditing) {
         console.log("editing");
-        // await stockService.updateStock(data.id, data); // exemplo
         await stockService.updateStock(id, data);
       } else {
-        stockDevices.push(data);
-        await stockService.createStock(data);
+        await stockService.createStock({
+          ...data,
+          marca: data.modelo.split(" ")[0] ?? "Sem marca",
+          capacidade: data.modelo.match(/(\d+\s?(?:GB|TB))/i)?.[1]?.toUpperCase() ?? "",
+          preco: data.valor_unitario,
+          condicao: data.observacao?.toLowerCase().includes("quebrada")
+            ? "Tela quebrada"
+            : "Seminovo",
+          dataEntrada: new Date().toISOString().split("T")[0],
+        });
       }
 
       toast(
@@ -116,7 +122,7 @@ const AddEditStock = () => {
         } ao estoque.`
       );
 
-      navigate("/");
+      navigate("/stock");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error("Erro ao salvar produto:", error);

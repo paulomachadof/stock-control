@@ -14,7 +14,7 @@ import {
   getTopProduct,
 } from "@/lib/salesInsights";
 import { AppUser, roleLabels } from "@/stores/useSessionStore";
-import { SoldDevice } from "@/data/mockData";
+import type { SoldDevice } from "@/types/saleTypes";
 import {
   Area,
   AreaChart,

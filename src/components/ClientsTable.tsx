@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -27,11 +28,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { masks, validators } from "@/hooks/use-masks";
+import { masks } from "@/hooks/use-masks";
 import { Client } from "@/data/mockData";
 import { ClientInput, useClientStore } from "@/stores/useClientStore";
 import {
+  clientToFormData,
+  emptyClientForm,
+  formDataToClientInput,
+  formatClientCPF,
+  formatClientPhone,
+  type ClientFormData,
+  type ClientFormErrors,
+  validateClientForm,
+} from "@/lib/clientForm";
+import {
   Edit,
+  Eye,
   Mail,
   MapPin,
   Phone,
@@ -41,34 +53,8 @@ import {
   Users,
 } from "lucide-react";
 
-interface ClientFormData extends Omit<ClientInput, "total_compras"> {
-  total_compras: string;
-}
-
-interface ClientFormErrors {
-  nome?: string;
-  cpf?: string;
-  email?: string;
-  telefone?: string;
-  cidade?: string;
-  estado?: string;
-  cep?: string;
-}
-
-const emptyClientForm: ClientFormData = {
-  nome: "",
-  cpf: "",
-  email: "",
-  telefone: "",
-  endereco: "",
-  cidade: "",
-  estado: "",
-  cep: "",
-  data_cadastro: new Date().toISOString().split("T")[0],
-  total_compras: "0",
-};
-
 export function ClientsTable() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const clients = useClientStore((state) => state.clients);
   const addClient = useClientStore((state) => state.addClient);
@@ -113,64 +99,26 @@ export function ClientsTable() {
 
   const openCreateDialog = () => {
     setEditingClient(null);
-    setFormData({
-      ...emptyClientForm,
-      data_cadastro: new Date().toISOString().split("T")[0],
-    });
+    setFormData(emptyClientForm());
     setErrors({});
     setIsDialogOpen(true);
   };
 
   const openEditDialog = (client: Client) => {
     setEditingClient(client);
-    setFormData({
-      ...client,
-      cpf: masks.cpf(client.cpf),
-      telefone: masks.phone(client.telefone),
-      cep: masks.cep(client.cep),
-      total_compras: String(client.total_compras),
-    });
+    setFormData(clientToFormData(client));
     setErrors({});
     setIsDialogOpen(true);
   };
 
-  const validateForm = () => {
-    const nextErrors: ClientFormErrors = {};
-
-    if (!formData.nome.trim()) {
-      nextErrors.nome = "Nome é obrigatório";
-    }
-
-    if (!validators.cpf(formData.cpf)) {
-      nextErrors.cpf = "CPF inválido";
-    }
-
-    if (!validators.email(formData.email)) {
-      nextErrors.email = "Email inválido";
-    }
-
-    if (!validators.phone(formData.telefone)) {
-      nextErrors.telefone = "Telefone inválido";
-    }
-
-    if (!formData.cidade.trim()) {
-      nextErrors.cidade = "Cidade é obrigatória";
-    }
-
-    if (formData.estado.trim().length !== 2) {
-      nextErrors.estado = "Informe a UF com 2 letras";
-    }
-
-    if (!validators.cep(formData.cep)) {
-      nextErrors.cep = "CEP inválido";
-    }
-
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
   const handleSubmit = () => {
-    if (!validateForm()) {
+    const nextErrors = validateClientForm(
+      formData,
+      editingClient ? clientToFormData(editingClient) : undefined,
+    );
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
       toast({
         title: "Revise o formulário",
         description: "Corrija os campos destacados antes de salvar o cliente.",
@@ -179,18 +127,7 @@ export function ClientsTable() {
       return;
     }
 
-    const payload: ClientInput = {
-      nome: formData.nome,
-      cpf: formData.cpf.replace(/\D/g, ""),
-      email: formData.email,
-      telefone: formData.telefone.replace(/\D/g, ""),
-      endereco: formData.endereco,
-      cidade: formData.cidade,
-      estado: formData.estado.toUpperCase(),
-      cep: formData.cep.replace(/\D/g, ""),
-      data_cadastro: formData.data_cadastro,
-      total_compras: Number(formData.total_compras || 0),
-    };
+    const payload: ClientInput = formDataToClientInput(formData);
 
     if (editingClient) {
       updateClient(editingClient.id, payload);
@@ -220,12 +157,6 @@ export function ClientsTable() {
       description: `${client.nome} foi excluído com sucesso.`,
     });
   };
-
-  const formatCPF = (cpf: string) =>
-    cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-
-  const formatPhone = (phone: string) =>
-    phone.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
 
   return (
     <div className="space-y-6">
@@ -308,14 +239,25 @@ export function ClientsTable() {
                   </TableRow>
                 ) : (
                   filteredClients.map((client) => (
-                    <TableRow key={client.id}>
-                      <TableCell className="font-medium">{client.nome}</TableCell>
-                      <TableCell>{formatCPF(client.cpf)}</TableCell>
+                    <TableRow key={client.id} className="cursor-pointer" onClick={() => navigate(`/clients/${client.id}`)}>
+                      <TableCell className="font-medium">
+                        <button
+                          type="button"
+                          className="text-left transition-colors hover:text-primary"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(`/clients/${client.id}`);
+                          }}
+                        >
+                          {client.nome}
+                        </button>
+                      </TableCell>
+                      <TableCell>{formatClientCPF(client.cpf)}</TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 text-sm">
                             <Phone className="h-3 w-3 text-muted-foreground" />
-                            {formatPhone(client.telefone)}
+                            {formatClientPhone(client.telefone)}
                           </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Mail className="h-3 w-3" />
@@ -334,10 +276,34 @@ export function ClientsTable() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(client)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              navigate(`/clients/${client.id}`);
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openEditDialog(client);
+                            }}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(client)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDelete(client);
+                            }}
+                          >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>

@@ -1,5 +1,5 @@
-import { SoldDevice } from "@/data/mockData";
 import { AppUser } from "@/stores/useSessionStore";
+import type { SoldDevice } from "@/types/saleTypes";
 
 export interface SalesMetrics {
   completedSales: number;
